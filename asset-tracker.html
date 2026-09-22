@@ -174,6 +174,7 @@
   .app-header .brand-text strong { font-size: 15px; font-weight: 700; }
   .app-header .brand-text span { font-size: 11.5px; color: var(--text-dim); }
   .header-spacer { flex: 1; }
+  .current-user-label { font-size: 12px; color: var(--text-dim); white-space: nowrap; margin-left: 4px; }
   .icon-btn {
     width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--border-strong);
     background: var(--bg-elevated); color: var(--text); display: flex; align-items: center;
@@ -322,6 +323,22 @@
   }
   .export-item { padding: 10px 14px; font-size: 13px; cursor: pointer; }
   .export-item:hover { background: var(--bg-elevated-hover); }
+
+  .users-modal-card { max-width: 420px; }
+  .users-list { max-height: 260px; overflow-y: auto; margin-bottom: 14px; }
+  .user-row {
+    display: flex; align-items: center; gap: 10px; padding: 10px 4px; border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .user-row:last-child { border-bottom: none; }
+  .user-row .u-name { font-weight: 600; flex: 1; }
+  .user-row .u-username { color: var(--text-faint); font-size: 11.5px; direction: ltr; text-align: left; }
+  .user-role-badge {
+    font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; flex-shrink: 0;
+  }
+  .user-role-badge.admin { background: var(--bronze-soft); color: var(--bronze); }
+  .user-role-badge.user { background: var(--accent-soft); color: var(--accent); }
+  .users-add-toggle { width: 100%; justify-content: center; margin-bottom: 4px; }
 
   .filter-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
   .filter-bar select {
@@ -511,6 +528,10 @@
         <span>آذین طب سلامت رازی</span>
       </div>
       <div class="header-spacer"></div>
+      <span class="current-user-label" id="currentUserLabel"></span>
+      <button class="icon-btn hidden" id="usersBtn" title="مدیریت کاربران" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      </button>
       <button class="icon-btn" id="themeToggle" title="تغییر پوسته" type="button"></button>
       <button class="logout-btn" id="logoutBtn" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
@@ -547,6 +568,10 @@
           <h3>همه دارایی‌ها</h3>
           <span class="count-pill" id="countPill">۰ مورد</span>
           <div class="header-spacer"></div>
+          <button class="icon-btn" id="importBtn" title="وارد کردن از اکسل" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
+          </button>
+          <input type="file" id="importFileInput" class="hidden" accept=".xlsx,.xls,.csv">
           <div class="export-wrap">
             <button class="icon-btn" id="exportBtn" title="خروجی گرفتن" type="button">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
@@ -731,6 +756,48 @@
   </div>
 </div>
 
+<!-- Users management modal (admin only) -->
+<div class="modal-overlay hidden" id="usersOverlay">
+  <div class="modal-card users-modal-card">
+    <h3>مدیریت کاربران</h3>
+    <div id="usersList" class="users-list"></div>
+    <button type="button" class="add-btn users-add-toggle" id="showAddUserForm">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      افزودن کاربر جدید
+    </button>
+    <form id="userForm" class="hidden">
+      <input type="hidden" id="u_docId">
+      <div class="field">
+        <label for="u_username">نام کاربری *</label>
+        <input id="u_username" class="ltr-input" type="text" required autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="u_password">رمز عبور *</label>
+        <input id="u_password" class="ltr-input" type="text" required autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="u_displayName">نام نمایشی *</label>
+        <input id="u_displayName" type="text" required placeholder="آقای/خانم .......">
+      </div>
+      <div class="field">
+        <label for="u_role">سطح دسترسی</label>
+        <select id="u_role">
+          <option value="user">کاربر عادی</option>
+          <option value="admin">ادمین</option>
+        </select>
+      </div>
+      <div class="form-error" id="userFormError"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" id="cancelUserForm">انصراف</button>
+        <button type="submit" class="btn-primary">ذخیره کاربر</button>
+      </div>
+    </form>
+    <div class="modal-actions" style="margin-top: 18px;">
+      <button type="button" class="btn-secondary" id="closeUsersModal">بستن</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function () {
   "use strict";
@@ -841,24 +908,41 @@
   window.addEventListener('resize', function () { resize(); initParticles(); });
 
   /* ---------------- Login ---------------- */
-  var VALID_USER = "MohammadAb";
-  var VALID_PASS = "3659";
+  var VALID_USER = "HojjatAdvanced";
+  var VALID_PASS = "0880347163";
   var loginScreen = document.getElementById('loginScreen');
   var appScreen = document.getElementById('appScreen');
+  var currentUser = null; // {username, displayName, role}
+
+  function actorLabel() {
+    return currentUser ? (currentUser.displayName || currentUser.username) : '—';
+  }
+
+  function renderUserBar() {
+    var el = document.getElementById('currentUserLabel');
+    var adminBtn = document.getElementById('usersBtn');
+    if (!el) return;
+    el.textContent = currentUser ? actorLabel() : '';
+    if (adminBtn) adminBtn.classList.toggle('hidden', !(currentUser && currentUser.role === 'admin'));
+  }
 
   function showApp() {
     loginScreen.classList.add('hidden');
     appScreen.classList.remove('hidden');
-    initDb();
+    renderUserBar();
   }
   function showLogin() {
     appScreen.classList.add('hidden');
     loginScreen.classList.remove('hidden');
   }
 
-  if (sessionStorage.getItem('medazinco_asset_auth') === '1') {
-    showApp();
-  }
+  try {
+    var savedUser = sessionStorage.getItem('medazinco_asset_user');
+    if (sessionStorage.getItem('medazinco_asset_auth') === '1' && savedUser) {
+      currentUser = JSON.parse(savedUser);
+      showApp();
+    }
+  } catch (e) {}
 
   document.getElementById('loginPassToggle').addEventListener('click', function () {
     var pw = document.getElementById('loginPass');
@@ -874,9 +958,20 @@
     var u = document.getElementById('loginUser').value.trim();
     var p = document.getElementById('loginPass').value;
     var err = document.getElementById('loginError');
+    var matchedUser = null;
     if (u === VALID_USER && p === VALID_PASS) {
+      matchedUser = { username: VALID_USER, displayName: 'مدیر سیستم', role: 'admin' };
+    } else {
+      var found = users.find(function (x) { return x.username === u && x.password === p; });
+      if (found) matchedUser = { username: found.username, displayName: found.displayName || found.username, role: found.role || 'user' };
+    }
+    if (matchedUser) {
       err.textContent = '';
-      sessionStorage.setItem('medazinco_asset_auth', '1');
+      currentUser = matchedUser;
+      try {
+        sessionStorage.setItem('medazinco_asset_auth', '1');
+        sessionStorage.setItem('medazinco_asset_user', JSON.stringify(matchedUser));
+      } catch (ex) {}
       showApp();
     } else {
       err.textContent = 'نام کاربری یا رمز عبور اشتباه است';
@@ -885,6 +980,8 @@
 
   document.getElementById('logoutBtn').addEventListener('click', function () {
     sessionStorage.removeItem('medazinco_asset_auth');
+    sessionStorage.removeItem('medazinco_asset_user');
+    currentUser = null;
     document.getElementById('loginPass').value = '';
     showLogin();
   });
@@ -926,9 +1023,11 @@
 
   /* ---------------- App state ---------------- */
   var assets = [];   // [{id, code, name, category, assignee, department, phone, location, status, deliveryDate, notes, createdAt, updatedAt, history:[]}]
+  var users = [];    // [{id, username, password, displayName, role, createdAt}]
   var dbNs = null;
   var dbReady = false;
   var localFallback = []; // used only if db capability unavailable
+  var localUsersFallback = [];
   var filters = { category: '', department: '', status: '', sort: 'newest' };
 
   function persistLocalFallback() {
@@ -939,6 +1038,24 @@
       var raw = localStorage.getItem('medazinco_assets_fallback');
       if (raw) localFallback = JSON.parse(raw);
     } catch (e) { localFallback = []; }
+  }
+  function persistLocalUsers() {
+    try { localStorage.setItem('medazinco_users_fallback', JSON.stringify(localUsersFallback)); } catch (e) {}
+  }
+  function loadLocalUsers() {
+    try {
+      var raw = localStorage.getItem('medazinco_users_fallback');
+      if (raw) localUsersFallback = JSON.parse(raw);
+    } catch (e) { localUsersFallback = []; }
+  }
+
+  var mohammadAbSeedAttempted = false;
+  function ensureMohammadAbSeeded() {
+    if (mohammadAbSeedAttempted) return;
+    var exists = users.some(function (u) { return (u.username || '').toLowerCase() === 'mohammadab'; });
+    if (exists) { mohammadAbSeedAttempted = true; return; }
+    mohammadAbSeedAttempted = true;
+    saveUser({ username: 'MohammadAb', password: '3659', displayName: 'MohammadAb', role: 'user', createdAt: nowIso() }, null);
   }
 
   async function initDb() {
@@ -965,13 +1082,29 @@
         assets = localFallback.slice();
         renderAll();
       }
+      try {
+        dbNs.collection('users').onSnapshot(function (snap) {
+          users = snap.docs.map(function (d) {
+            var data = d.data() || {};
+            data.id = d.id;
+            return data;
+          });
+          renderUsersList();
+          ensureMohammadAbSeeded();
+        }, function (err) {});
+      } catch (e) {}
     } else {
       dbReady = false;
       loadLocalFallback();
       assets = localFallback.slice();
+      loadLocalUsers();
+      users = localUsersFallback.slice();
       renderAll();
+      renderUsersList();
+      ensureMohammadAbSeeded();
     }
   }
+  initDb();
 
   async function saveAsset(data, editingId) {
     if (dbReady && dbNs) {
@@ -1003,6 +1136,69 @@
       assets = localFallback.slice();
       renderAll();
     }
+  }
+
+  /* ---------------- User CRUD (admin) ---------------- */
+  async function saveUser(data, editingId) {
+    if (dbReady && dbNs) {
+      var col = dbNs.collection('users');
+      if (editingId) {
+        await col.doc(editingId).update(data);
+      } else {
+        await col.add(data);
+      }
+    } else {
+      if (editingId) {
+        var idx = localUsersFallback.findIndex(function (u) { return u.id === editingId; });
+        if (idx > -1) localUsersFallback[idx] = Object.assign({}, localUsersFallback[idx], data);
+      } else {
+        localUsersFallback.push(Object.assign({ id: 'local_' + Date.now() }, data));
+      }
+      persistLocalUsers();
+      users = localUsersFallback.slice();
+      renderUsersList();
+    }
+  }
+
+  async function deleteUser(id) {
+    if (dbReady && dbNs) {
+      await dbNs.collection('users').doc(id).delete();
+    } else {
+      localUsersFallback = localUsersFallback.filter(function (u) { return u.id !== id; });
+      persistLocalUsers();
+      users = localUsersFallback.slice();
+      renderUsersList();
+    }
+  }
+
+  function renderUsersList() {
+    var el = document.getElementById('usersList');
+    if (!el) return;
+    if (!users.length) {
+      el.innerHTML = '<div class="not-found" style="font-size:12.5px;">هنوز کاربری اضافه نشده</div>';
+      return;
+    }
+    el.innerHTML = users.map(function (u) {
+      var roleLabel = u.role === 'admin' ? 'ادمین' : 'کاربر عادی';
+      return '<div class="user-row">' +
+        '<div style="flex:1;"><div class="u-name">' + esc(u.displayName || u.username) + '</div><div class="u-username">' + esc(u.username) + '</div></div>' +
+        '<span class="user-role-badge ' + (u.role === 'admin' ? 'admin' : 'user') + '">' + roleLabel + '</span>' +
+        '<div class="row-icon-btn" data-edit-user="' + esc(u.id) + '" title="ویرایش"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg></div>' +
+        '<div class="row-icon-btn danger" data-delete-user="' + esc(u.id) + '" title="حذف"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg></div>' +
+        '</div>';
+    }).join('');
+    el.querySelectorAll('[data-edit-user]').forEach(function (btn) {
+      btn.addEventListener('click', function () { openEditUserForm(btn.getAttribute('data-edit-user')); });
+    });
+    el.querySelectorAll('[data-delete-user]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-delete-user');
+        var u = users.find(function (x) { return x.id === id; });
+        if (confirm('حذف کاربر «' + (u ? (u.displayName || u.username) : '') + '» انجام شود؟')) {
+          deleteUser(id).then(function () { toast('کاربر حذف شد'); });
+        }
+      });
+    });
   }
 
   /* ---------------- Rendering ---------------- */
@@ -1107,6 +1303,7 @@
       hist.forEach(function (h) {
         var label = h.type === 'created' ? 'ثبت اولیه دارایی' :
           h.type === 'transferred' ? ('انتقال به ' + esc(h.to || '') + (h.from ? ' (از ' + esc(h.from) + ')' : '')) : 'ویرایش اطلاعات';
+        if (h.by) label += ' — توسط ' + esc(h.by);
         html += '<div class="h-entry"><span><b>' + label + '</b></span><span>' + faDateTime(h.at) + '</span></div>';
       });
       html += '</div>';
@@ -1343,6 +1540,109 @@
     window.print();
   });
 
+  /* ---------------- Import from Excel (smart column detection) ---------------- */
+  var HEADER_ALIASES = {
+    code: ['کد اموال', 'کد کالا', 'کد', 'asset code', 'code', 'id', 'شماره اموال'],
+    name: ['نام کالا', 'نام دارایی', 'نام', 'name', 'product', 'item', 'کالا'],
+    category: ['دسته بندی', 'دسته‌بندی', 'دسته', 'category', 'گروه'],
+    assignee: ['شخص مسئول', 'مسئول', 'تحویل گیرنده', 'تحویل‌گیرنده', 'assignee', 'person', 'نام شخص'],
+    department: ['واحد', 'بخش', 'department', 'unit'],
+    phone: ['شماره تماس', 'شماره تلفن', 'تلفن', 'موبایل', 'phone', 'mobile', 'tel'],
+    location: ['محل', 'مکان', 'location'],
+    status: ['وضعیت', 'status'],
+    deliveryDate: ['تاریخ تحویل', 'تاریخ', 'date'],
+    notes: ['توضیحات', 'یادداشت', 'notes', 'description']
+  };
+  var STATUS_ALIASES = {
+    'در حال استفاده': 'inuse', 'inuse': 'inuse', 'استفاده': 'inuse',
+    'در انبار': 'store', 'store': 'store', 'انبار': 'store',
+    'در تعمیر': 'repair', 'repair': 'repair', 'تعمیر': 'repair',
+    'اسقاط': 'retired', 'retired': 'retired'
+  };
+  function normalizeHeader(h) {
+    return String(h == null ? '' : h).trim().toLowerCase().replace(/[\u200c\s]+/g, ' ');
+  }
+  function detectColumns(headerRow) {
+    var map = {}; // fieldKey -> columnIndex
+    headerRow.forEach(function (raw, idx) {
+      var norm = normalizeHeader(raw);
+      if (!norm) return;
+      Object.keys(HEADER_ALIASES).forEach(function (field) {
+        if (map[field] !== undefined) return;
+        var found = HEADER_ALIASES[field].some(function (alias) { return normalizeHeader(alias) === norm; });
+        if (found) map[field] = idx;
+      });
+    });
+    return map;
+  }
+  function detectStatus(raw) {
+    var norm = normalizeHeader(raw);
+    return STATUS_ALIASES[norm] || 'inuse';
+  }
+
+  document.getElementById('importBtn').addEventListener('click', function () {
+    document.getElementById('importFileInput').click();
+  });
+
+  document.getElementById('importFileInput').addEventListener('change', function (e) {
+    var file = e.target.files && e.target.files[0];
+    if (!file) return;
+    if (typeof XLSX === 'undefined') { toast('کتابخانه Excel بارگذاری نشد'); e.target.value = ''; return; }
+    var reader = new FileReader();
+    reader.onload = async function (ev) {
+      try {
+        var data = new Uint8Array(ev.target.result);
+        var wb = XLSX.read(data, { type: 'array' });
+        var ws = wb.Sheets[wb.SheetNames[0]];
+        var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+        if (!rows.length) { toast('فایل خالی است'); return; }
+        var colMap = detectColumns(rows[0]);
+        if (colMap.code === undefined || colMap.name === undefined) {
+          toast('ستون کد اموال یا نام کالا در فایل پیدا نشد');
+          return;
+        }
+        var existingCodes = {};
+        assets.forEach(function (a) { existingCodes[(a.code || '').toLowerCase()] = true; });
+
+        var added = 0, skippedDup = 0, skippedInvalid = 0;
+        for (var i = 1; i < rows.length; i++) {
+          var row = rows[i];
+          if (!row || row.every(function (c) { return String(c).trim() === ''; })) continue;
+          var get = function (field) { return colMap[field] !== undefined ? String(row[colMap[field]] == null ? '' : row[colMap[field]]).trim() : ''; };
+          var code = get('code'), name = get('name');
+          if (!code || !name) { skippedInvalid++; continue; }
+          if (existingCodes[code.toLowerCase()]) { skippedDup++; continue; }
+          existingCodes[code.toLowerCase()] = true;
+          var now = nowIso();
+          var data2 = {
+            code: code,
+            name: name,
+            category: get('category') || 'سایر',
+            assignee: get('assignee'),
+            department: get('department'),
+            phone: get('phone'),
+            location: get('location'),
+            status: colMap.status !== undefined ? detectStatus(get('status')) : 'inuse',
+            deliveryDate: get('deliveryDate'),
+            notes: get('notes'),
+            createdAt: now,
+            updatedAt: now,
+            history: [{ type: 'created', at: now, by: actorLabel() + ' (ورود از اکسل)' }]
+          };
+          try {
+            await saveAsset(data2, null);
+            added++;
+          } catch (err) { skippedInvalid++; }
+        }
+        toast(toFaDigits(added) + ' مورد اضافه شد' + (skippedDup ? '، ' + toFaDigits(skippedDup) + ' تکراری رد شد' : '') + (skippedInvalid ? '، ' + toFaDigits(skippedInvalid) + ' ردیف نامعتبر' : ''));
+      } catch (err) {
+        toast('خواندن فایل اکسل انجام نشد');
+      }
+      e.target.value = '';
+    };
+    reader.readAsArrayBuffer(file);
+  });
+
   /* ---------------- Modal ---------------- */
   var modalOverlay = document.getElementById('modalOverlay');
   var assetForm = document.getElementById('assetForm');
@@ -1417,15 +1717,15 @@
     if (existing) {
       var history = (existing.history || []).slice();
       if (existing.assignee !== assignee) {
-        history.push({ type: 'transferred', at: now, from: existing.assignee, to: assignee });
+        history.push({ type: 'transferred', at: now, from: existing.assignee, to: assignee, by: actorLabel() });
       } else {
-        history.push({ type: 'edited', at: now });
+        history.push({ type: 'edited', at: now, by: actorLabel() });
       }
       data.history = history;
       data.createdAt = existing.createdAt || now;
     } else {
       data.createdAt = now;
-      data.history = [{ type: 'created', at: now }];
+      data.history = [{ type: 'created', at: now, by: actorLabel() }];
     }
 
     saveAsset(data, editingId || null).then(function () {
@@ -1475,7 +1775,7 @@
     }
     var now = nowIso();
     var history = (a.history || []).slice();
-    var histEntry = { type: 'transferred', at: now, from: a.assignee, to: newAssignee };
+    var histEntry = { type: 'transferred', at: now, from: a.assignee, to: newAssignee, by: actorLabel() };
     if (note) histEntry.note = note;
     history.push(histEntry);
     var data = {
@@ -1492,6 +1792,77 @@
       toast('انتقال با موفقیت ثبت شد');
     }).catch(function () {
       document.getElementById('transferError').textContent = 'ثبت انتقال انجام نشد — دوباره تلاش کنید';
+    });
+  });
+
+  /* ---------------- Users admin modal ---------------- */
+  var usersOverlay = document.getElementById('usersOverlay');
+  var userForm = document.getElementById('userForm');
+
+  document.getElementById('usersBtn').addEventListener('click', function () {
+    userForm.classList.add('hidden');
+    document.getElementById('showAddUserForm').classList.remove('hidden');
+    renderUsersList();
+    usersOverlay.classList.remove('hidden');
+  });
+  document.getElementById('closeUsersModal').addEventListener('click', function () { usersOverlay.classList.add('hidden'); });
+  usersOverlay.addEventListener('click', function (e) { if (e.target === usersOverlay) usersOverlay.classList.add('hidden'); });
+
+  function openAddUserForm() {
+    document.getElementById('u_docId').value = '';
+    userForm.reset();
+    document.getElementById('userFormError').textContent = '';
+    document.getElementById('showAddUserForm').classList.add('hidden');
+    userForm.classList.remove('hidden');
+    document.getElementById('u_username').focus();
+  }
+  function openEditUserForm(id) {
+    var u = users.find(function (x) { return x.id === id; });
+    if (!u) return;
+    document.getElementById('u_docId').value = id;
+    document.getElementById('u_username').value = u.username || '';
+    document.getElementById('u_password').value = u.password || '';
+    document.getElementById('u_displayName').value = u.displayName || '';
+    document.getElementById('u_role').value = u.role || 'user';
+    document.getElementById('userFormError').textContent = '';
+    document.getElementById('showAddUserForm').classList.add('hidden');
+    userForm.classList.remove('hidden');
+  }
+  document.getElementById('showAddUserForm').addEventListener('click', openAddUserForm);
+  document.getElementById('cancelUserForm').addEventListener('click', function () {
+    userForm.classList.add('hidden');
+    document.getElementById('showAddUserForm').classList.remove('hidden');
+  });
+
+  userForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var editingId = document.getElementById('u_docId').value;
+    var username = document.getElementById('u_username').value.trim();
+    var password = document.getElementById('u_password').value.trim();
+    var displayName = document.getElementById('u_displayName').value.trim();
+    var role = document.getElementById('u_role').value;
+    var err = document.getElementById('userFormError');
+    if (!username || !password || !displayName) {
+      err.textContent = 'همه فیلدهای ستاره‌دار الزامی هستند';
+      return;
+    }
+    if (username === VALID_USER) {
+      err.textContent = 'این نام کاربری رزرو شده — نام دیگری انتخاب کنید';
+      return;
+    }
+    var dup = users.find(function (u) { return u.username.toLowerCase() === username.toLowerCase() && u.id !== editingId; });
+    if (dup) {
+      err.textContent = 'این نام کاربری قبلاً استفاده شده';
+      return;
+    }
+    var data = { username: username, password: password, displayName: displayName, role: role };
+    if (!editingId) data.createdAt = nowIso();
+    saveUser(data, editingId || null).then(function () {
+      userForm.classList.add('hidden');
+      document.getElementById('showAddUserForm').classList.remove('hidden');
+      toast(editingId ? 'کاربر ویرایش شد' : 'کاربر جدید اضافه شد');
+    }).catch(function () {
+      err.textContent = 'ذخیره انجام نشد — دوباره تلاش کنید';
     });
   });
 
