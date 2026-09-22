@@ -340,6 +340,18 @@
   .user-role-badge.user { background: var(--accent-soft); color: var(--accent); }
   .users-add-toggle { width: 100%; justify-content: center; margin-bottom: 4px; }
 
+  .log-row {
+    display: grid; grid-template-columns: 1.2fr 0.8fr 1.2fr 1fr;
+    gap: 10px; align-items: center; padding: 11px 14px; border-bottom: 1px solid var(--border);
+    font-size: 12.5px;
+  }
+  .log-row:last-child { border-bottom: none; }
+  .log-row.head { font-size: 11px; color: var(--text-faint); font-weight: 700; background: var(--bg-elevated); }
+  @media (max-width: 640px) {
+    .log-row { grid-template-columns: 1fr 0.7fr; }
+    .log-row > div:nth-child(3), .log-row > div:nth-child(4) { display: none; }
+  }
+
   .filter-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
   .filter-bar select {
     background: var(--bg-elevated); border: 1px solid var(--border-strong); color: var(--text-dim);
@@ -531,6 +543,9 @@
       <span class="current-user-label" id="currentUserLabel"></span>
       <button class="icon-btn hidden" id="usersBtn" title="مدیریت کاربران" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      </button>
+      <button class="icon-btn hidden" id="loginLogsBtn" title="گزارش ورود و خروج" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
       </button>
       <button class="icon-btn" id="themeToggle" title="تغییر پوسته" type="button"></button>
       <button class="logout-btn" id="logoutBtn" type="button">
@@ -798,6 +813,18 @@
   </div>
 </div>
 
+<!-- Login/logout activity log modal (admin only) -->
+<div class="modal-overlay hidden" id="loginLogsOverlay">
+  <div class="modal-card users-modal-card" style="max-width: 620px;">
+    <h3>گزارش ورود و خروج</h3>
+    <div id="loginLogsList" class="users-list" style="max-height: 360px;"></div>
+    <div class="modal-actions" style="margin-top: 18px;">
+      <button type="button" class="btn-secondary" id="closeLoginLogsModal">بستن</button>
+      <button type="button" class="btn-primary" id="exportLoginLogsBtn">خروجی Excel</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function () {
   "use strict";
@@ -921,13 +948,16 @@
   function renderUserBar() {
     var el = document.getElementById('currentUserLabel');
     var adminBtn = document.getElementById('usersBtn');
+    var logsBtn = document.getElementById('loginLogsBtn');
     if (!el) return;
     if (currentUser) {
       el.textContent = currentUser.role === 'admin' ? actorLabel() : ('کاربر ' + actorLabel());
     } else {
       el.textContent = '';
     }
-    if (adminBtn) adminBtn.classList.toggle('hidden', !(currentUser && currentUser.role === 'admin'));
+    var isAdmin = !!(currentUser && currentUser.role === 'admin');
+    if (adminBtn) adminBtn.classList.toggle('hidden', !isAdmin);
+    if (logsBtn) logsBtn.classList.toggle('hidden', !isAdmin);
   }
 
   function showApp() {
@@ -977,12 +1007,14 @@
         sessionStorage.setItem('medazinco_asset_user', JSON.stringify(matchedUser));
       } catch (ex) {}
       showApp();
+      logLoginEvent('login', matchedUser);
     } else {
       err.textContent = 'نام کاربری یا رمز عبور اشتباه است';
     }
   });
 
   document.getElementById('logoutBtn').addEventListener('click', function () {
+    if (currentUser) logLoginEvent('logout', currentUser);
     sessionStorage.removeItem('medazinco_asset_auth');
     sessionStorage.removeItem('medazinco_asset_user');
     currentUser = null;
@@ -1028,10 +1060,12 @@
   /* ---------------- App state ---------------- */
   var assets = [];   // [{id, code, name, category, assignee, department, phone, location, status, deliveryDate, notes, createdAt, updatedAt, history:[]}]
   var users = [];    // [{id, username, password, displayName, role, createdAt}]
+  var loginLogs = []; // [{id, username, displayName, role, action, at, device}]
   var dbNs = null;
   var dbReady = false;
   var localFallback = []; // used only if db capability unavailable
   var localUsersFallback = [];
+  var localLoginLogsFallback = [];
   var filters = { category: '', department: '', status: '', sort: 'newest' };
 
   function persistLocalFallback() {
@@ -1051,6 +1085,15 @@
       var raw = localStorage.getItem('medazinco_users_fallback');
       if (raw) localUsersFallback = JSON.parse(raw);
     } catch (e) { localUsersFallback = []; }
+  }
+  function persistLocalLoginLogs() {
+    try { localStorage.setItem('medazinco_loginlogs_fallback', JSON.stringify(localLoginLogsFallback)); } catch (e) {}
+  }
+  function loadLocalLoginLogs() {
+    try {
+      var raw = localStorage.getItem('medazinco_loginlogs_fallback');
+      if (raw) localLoginLogsFallback = JSON.parse(raw);
+    } catch (e) { localLoginLogsFallback = []; }
   }
 
   var mohammadAbSeedAttempted = false;
@@ -1097,14 +1140,27 @@
           ensureMohammadAbSeeded();
         }, function (err) {});
       } catch (e) {}
+      try {
+        dbNs.collection('loginLogs').onSnapshot(function (snap) {
+          loginLogs = snap.docs.map(function (d) {
+            var data = d.data() || {};
+            data.id = d.id;
+            return data;
+          });
+          renderLoginLogs();
+        }, function (err) {});
+      } catch (e) {}
     } else {
       dbReady = false;
       loadLocalFallback();
       assets = localFallback.slice();
       loadLocalUsers();
       users = localUsersFallback.slice();
+      loadLocalLoginLogs();
+      loginLogs = localLoginLogsFallback.slice();
       renderAll();
       renderUsersList();
+      renderLoginLogs();
       ensureMohammadAbSeeded();
     }
   }
@@ -1173,6 +1229,65 @@
       users = localUsersFallback.slice();
       renderUsersList();
     }
+  }
+
+  /* ---------------- Login/logout activity log ---------------- */
+  function deviceLabel() {
+    var ua = navigator.userAgent || '';
+    var browser = 'مرورگر نامشخص';
+    if (/Edg\//.test(ua)) browser = 'Edge';
+    else if (/Chrome\//.test(ua) && !/OPR\//.test(ua)) browser = 'Chrome';
+    else if (/Firefox\//.test(ua)) browser = 'Firefox';
+    else if (/Safari\//.test(ua) && !/Chrome\//.test(ua)) browser = 'Safari';
+    var os = 'سیستم نامشخص';
+    if (/Windows/.test(ua)) os = 'Windows';
+    else if (/Android/.test(ua)) os = 'Android';
+    else if (/iPhone|iPad|iOS/.test(ua)) os = 'iOS';
+    else if (/Mac OS/.test(ua)) os = 'macOS';
+    else if (/Linux/.test(ua)) os = 'Linux';
+    return browser + ' — ' + os;
+  }
+
+  async function logLoginEvent(action, userInfo) {
+    var entry = {
+      username: userInfo.username,
+      displayName: userInfo.displayName || userInfo.username,
+      role: userInfo.role,
+      action: action,
+      at: nowIso(),
+      device: deviceLabel()
+    };
+    if (dbReady && dbNs) {
+      try { await dbNs.collection('loginLogs').add(entry); } catch (e) {}
+    } else {
+      localLoginLogsFallback.push(Object.assign({ id: 'local_' + Date.now() }, entry));
+      persistLocalLoginLogs();
+      loginLogs = localLoginLogsFallback.slice();
+      renderLoginLogs();
+    }
+  }
+
+  function renderLoginLogs() {
+    var el = document.getElementById('loginLogsList');
+    if (!el) return;
+    if (!loginLogs.length) {
+      el.innerHTML = '<div class="not-found" style="font-size:12.5px;">هنوز ورود/خروجی ثبت نشده</div>';
+      return;
+    }
+    var sorted = loginLogs.slice().sort(function (a, b) { return new Date(b.at || 0) - new Date(a.at || 0); });
+    var html = '<div class="asset-table"><div class="log-row head"><div>نام کاربری</div><div>عملیات</div><div>دستگاه</div><div>تاریخ و ساعت</div></div>';
+    sorted.forEach(function (l) {
+      var actionLabel = l.action === 'login' ? 'ورود' : 'خروج';
+      var actionClass = l.action === 'login' ? 'status-inuse' : 'status-retired';
+      html += '<div class="log-row">';
+      html += '<div><b>' + esc(l.displayName || l.username) + '</b><div style="font-size:11px;color:var(--text-faint);direction:ltr;text-align:right;">' + esc(l.username) + '</div></div>';
+      html += '<div><span class="status-badge ' + actionClass + '">' + actionLabel + '</span></div>';
+      html += '<div style="font-size:11.5px;color:var(--text-dim);">' + esc(l.device || '—') + '</div>';
+      html += '<div style="font-size:12px;">' + faDateTime(l.at) + '</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+    el.innerHTML = html;
   }
 
   function renderUsersList() {
@@ -1868,6 +1983,35 @@
     }).catch(function () {
       err.textContent = 'ذخیره انجام نشد — دوباره تلاش کنید';
     });
+  });
+
+  /* ---------------- Login/logout log modal ---------------- */
+  var loginLogsOverlay = document.getElementById('loginLogsOverlay');
+  document.getElementById('loginLogsBtn').addEventListener('click', function () {
+    renderLoginLogs();
+    loginLogsOverlay.classList.remove('hidden');
+  });
+  document.getElementById('closeLoginLogsModal').addEventListener('click', function () { loginLogsOverlay.classList.add('hidden'); });
+  loginLogsOverlay.addEventListener('click', function (e) { if (e.target === loginLogsOverlay) loginLogsOverlay.classList.add('hidden'); });
+
+  document.getElementById('exportLoginLogsBtn').addEventListener('click', async function () {
+    if (!loginLogs.length) { toast('گزارشی برای خروجی گرفتن وجود ندارد'); return; }
+    if (typeof XLSX === 'undefined') { toast('کتابخانه Excel بارگذاری نشد'); return; }
+    try {
+      var sorted = loginLogs.slice().sort(function (a, b) { return new Date(b.at || 0) - new Date(a.at || 0); });
+      var headers = ['نام نمایشی', 'نام کاربری', 'عملیات', 'دستگاه', 'تاریخ و ساعت'];
+      var rows = sorted.map(function (l) {
+        return [l.displayName || l.username, l.username, l.action === 'login' ? 'ورود' : 'خروج', l.device || '', faDateTime(l.at)];
+      });
+      var ws = XLSX.utils.aoa_to_sheet([headers].concat(rows));
+      ws['!cols'] = headers.map(function () { return { wch: 20 }; });
+      var wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'ورود و خروج');
+      var wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      var blob = new Blob([wbout], { type: 'application/octet-stream' });
+      var ok = await saveFile('gozaresh-vorood-khorooj.xlsx', blob);
+      if (!ok) toast('خروجی گرفتن انجام نشد');
+    } catch (e) { toast('خروجی گرفتن انجام نشد'); }
   });
 
 })();
