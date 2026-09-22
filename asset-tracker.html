@@ -140,10 +140,11 @@
     font-family: inherit; outline: none; transition: border-color .2s ease, background .2s ease;
   }
   .field input:focus { border-color: var(--accent); }
-  .field input.ltr-input { direction: ltr; text-align: left; padding-left: 40px; }
+  .field input.ltr-input { direction: ltr; text-align: left; }
+  .password-wrap input { padding-right: 40px; }
   .password-wrap { position: relative; }
   .password-toggle {
-    position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+    position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
     width: 26px; height: 26px; border: none; background: transparent; color: var(--text-faint);
     cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;
   }
@@ -947,7 +948,7 @@
     } else {
       if (editingId) {
         var idx = localFallback.findIndex(function (a) { return a.id === editingId; });
-        if (idx > -1) localFallback[idx] = Object.assign({ id: editingId }, data);
+        if (idx > -1) localFallback[idx] = Object.assign({}, localFallback[idx], data);
       } else {
         localFallback.push(Object.assign({ id: 'local_' + Date.now() }, data));
       }
@@ -1384,7 +1385,9 @@
     }
     var now = nowIso();
     var history = (a.history || []).slice();
-    history.push({ type: 'transferred', at: now, from: a.assignee, to: newAssignee, note: note || undefined });
+    var histEntry = { type: 'transferred', at: now, from: a.assignee, to: newAssignee };
+    if (note) histEntry.note = note;
+    history.push(histEntry);
     var data = {
       assignee: newAssignee,
       department: newDept,
