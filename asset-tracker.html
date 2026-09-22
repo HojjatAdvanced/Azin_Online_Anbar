@@ -922,7 +922,11 @@
     var el = document.getElementById('currentUserLabel');
     var adminBtn = document.getElementById('usersBtn');
     if (!el) return;
-    el.textContent = currentUser ? actorLabel() : '';
+    if (currentUser) {
+      el.textContent = currentUser.role === 'admin' ? actorLabel() : ('کاربر ' + actorLabel());
+    } else {
+      el.textContent = '';
+    }
     if (adminBtn) adminBtn.classList.toggle('hidden', !(currentUser && currentUser.role === 'admin'));
   }
 
