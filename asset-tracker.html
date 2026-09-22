@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root {
     --bg: #071712;
@@ -313,6 +314,15 @@
   .add-btn:hover { background: var(--accent-strong); }
   .add-btn svg { width: 15px; height: 15px; }
 
+  .export-wrap { position: relative; }
+  .export-menu {
+    position: absolute; top: 44px; left: 0; z-index: 20; min-width: 170px;
+    background: var(--bg-panel); border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+    box-shadow: var(--shadow); overflow: hidden; text-align: right;
+  }
+  .export-item { padding: 10px 14px; font-size: 13px; cursor: pointer; }
+  .export-item:hover { background: var(--bg-elevated-hover); }
+
   .filter-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
   .filter-bar select {
     background: var(--bg-elevated); border: 1px solid var(--border-strong); color: var(--text-dim);
@@ -414,6 +424,23 @@
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
   .hidden { display: none !important; }
+
+  .print-area { display: none; }
+  @media print {
+    body * { visibility: hidden; }
+    #particles, .app-header, .clock-bar, .hero-search, .list-section-head, .filter-bar,
+    #listWrap, #activitySection, .support-section, .legal-footer { display: none !important; }
+    .print-area, .print-area * { visibility: visible; }
+    .print-area {
+      display: block !important; position: absolute; top: 0; right: 0; width: 100%;
+      background: #fff; color: #111; padding: 20px; direction: rtl;
+    }
+    .print-area h1 { font-size: 18px; margin: 0 0 4px; }
+    .print-area .print-meta { font-size: 11px; color: #555; margin-bottom: 16px; }
+    .print-area table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+    .print-area th, .print-area td { border: 1px solid #999; padding: 6px 8px; text-align: right; }
+    .print-area th { background: #eee; }
+  }
 
   .legal-footer {
     max-width: 920px; margin: 0 auto; padding: 18px 20px 40px; text-align: center;
@@ -520,9 +547,16 @@
           <h3>همه دارایی‌ها</h3>
           <span class="count-pill" id="countPill">۰ مورد</span>
           <div class="header-spacer"></div>
-          <button class="icon-btn" id="exportBtn" title="خروجی CSV" type="button">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
-          </button>
+          <div class="export-wrap">
+            <button class="icon-btn" id="exportBtn" title="خروجی گرفتن" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+            </button>
+            <div class="export-menu hidden" id="exportMenu">
+              <div class="export-item" id="exportCsvItem">خروجی CSV</div>
+              <div class="export-item" id="exportXlsxItem">خروجی Excel (xlsx)</div>
+              <div class="export-item" id="exportPdfItem">خروجی PDF</div>
+            </div>
+          </div>
           <button class="add-btn" id="addBtn" type="button">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
             افزودن دارایی
@@ -572,6 +606,8 @@
     <footer class="legal-footer">
       کلیه حقوق مادی و معنوی، طراحی، داده‌ها و امتیاز این سامانه متعلق به شرکت دانش‌بنیان فن‌آور آذین طب سلامت رازی (Medazinco) می‌باشد. هرگونه کپی‌برداری، بازنشر یا بهره‌برداری غیرمجاز بدون مجوز کتبی، پیگرد قانونی دارد.
     </footer>
+
+    <div id="printArea" class="print-area"></div>
   </div>
 
 </div>
@@ -1227,30 +1263,84 @@
     });
   });
 
-  /* ---------------- CSV export ---------------- */
-  document.getElementById('exportBtn').addEventListener('click', async function () {
-    if (!assets.length) { toast('دارایی‌ای برای خروجی گرفتن وجود ندارد'); return; }
+  /* ---------------- Export menu (CSV / Excel / PDF) ---------------- */
+  var exportMenu = document.getElementById('exportMenu');
+  document.getElementById('exportBtn').addEventListener('click', function (e) {
+    e.stopPropagation();
+    exportMenu.classList.toggle('hidden');
+  });
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest('.export-wrap')) exportMenu.classList.add('hidden');
+  });
+
+  function exportRows() {
     var headers = ['کد اموال', 'نام کالا', 'دسته‌بندی', 'شخص مسئول', 'واحد', 'شماره تماس', 'محل', 'وضعیت', 'تاریخ تحویل', 'توضیحات', 'تاریخ ثبت'];
     var rows = assets.map(function (a) {
-      return [a.code, a.name, a.category, a.assignee, a.department, a.phone, a.location, STATUS_LABEL[a.status] || a.status, a.deliveryDate, a.notes, faDateTime(a.createdAt)]
-        .map(function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }).join(',');
+      return [a.code, a.name, a.category, a.assignee, a.department, a.phone, a.location, STATUS_LABEL[a.status] || a.status, a.deliveryDate, a.notes, faDateTime(a.createdAt)];
     });
-    var csv = '\uFEFF' + headers.join(',') + '\n' + rows.join('\n');
+    return { headers: headers, rows: rows };
+  }
+
+  async function saveFile(filename, data) {
     try {
       var downloads = (window.claude && typeof window.claude.use === 'function') ? await window.claude.use('downloads') : null;
       if (downloads) {
-        await downloads.save({ filename: 'anbar-daraeiha.csv', data: csv });
-        return;
+        await downloads.save({ filename: filename, data: data });
+        return true;
       }
     } catch (e) {}
     try {
-      var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      var blob = data instanceof Blob ? data : new Blob([data]);
       var url = URL.createObjectURL(blob);
       var link = document.createElement('a');
-      link.href = url; link.download = 'anbar-daraeiha.csv';
+      link.href = url; link.download = filename;
       document.body.appendChild(link); link.click(); document.body.removeChild(link);
       URL.revokeObjectURL(url);
+      return true;
+    } catch (e) { return false; }
+  }
+
+  document.getElementById('exportCsvItem').addEventListener('click', async function () {
+    exportMenu.classList.add('hidden');
+    if (!assets.length) { toast('دارایی‌ای برای خروجی گرفتن وجود ندارد'); return; }
+    var r = exportRows();
+    var csv = '\uFEFF' + r.headers.join(',') + '\n' + r.rows.map(function (row) {
+      return row.map(function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }).join(',');
+    }).join('\n');
+    var ok = await saveFile('anbar-daraeiha.csv', csv);
+    if (!ok) toast('خروجی گرفتن انجام نشد');
+  });
+
+  document.getElementById('exportXlsxItem').addEventListener('click', async function () {
+    exportMenu.classList.add('hidden');
+    if (!assets.length) { toast('دارایی‌ای برای خروجی گرفتن وجود ندارد'); return; }
+    if (typeof XLSX === 'undefined') { toast('کتابخانه Excel بارگذاری نشد'); return; }
+    try {
+      var r = exportRows();
+      var ws = XLSX.utils.aoa_to_sheet([r.headers].concat(r.rows));
+      ws['!cols'] = r.headers.map(function () { return { wch: 18 }; });
+      var wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'دارایی‌ها');
+      var wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      var blob = new Blob([wbout], { type: 'application/octet-stream' });
+      var ok = await saveFile('anbar-daraeiha.xlsx', blob);
+      if (!ok) toast('خروجی گرفتن انجام نشد');
     } catch (e) { toast('خروجی گرفتن انجام نشد'); }
+  });
+
+  document.getElementById('exportPdfItem').addEventListener('click', function () {
+    exportMenu.classList.add('hidden');
+    if (!assets.length) { toast('دارایی‌ای برای خروجی گرفتن وجود ندارد'); return; }
+    var r = exportRows();
+    var html = '<h1>گزارش انبار دارایی‌ها — آذین طب سلامت رازی (Medazinco)</h1>';
+    html += '<div class="print-meta">تاریخ تهیه گزارش: ' + faDateTime(nowIso()) + ' — تعداد کل: ' + toFaDigits(assets.length) + ' مورد</div>';
+    html += '<table><thead><tr>' + r.headers.map(function (h) { return '<th>' + esc(h) + '</th>'; }).join('') + '</tr></thead><tbody>';
+    r.rows.forEach(function (row) {
+      html += '<tr>' + row.map(function (v) { return '<td>' + esc(v == null ? '' : v) + '</td>'; }).join('') + '</tr>';
+    });
+    html += '</tbody></table>';
+    document.getElementById('printArea').innerHTML = html;
+    window.print();
   });
 
   /* ---------------- Modal ---------------- */
