@@ -1074,6 +1074,7 @@
 
   /* ---------------- Sites ---------------- */
   var SITE_KEYS = ['shirkat-ghaen', 'sarmaye-ghaen', 'shirkat-zirkuh', 'sarmaye-zirkuh'];
+  var CATEGORY_OPTIONS = ['تجهیزات رایانه‌ای', 'مبلمان و کمدهای اداری', 'ماشین‌آلات کارخانه', 'آنادایزینگ', 'پرداخت', 'انبار حین ساخت', 'انبار ابزار و مصرفی', 'ابزار', 'حراست', 'سایر'];
   var SITE_LABELS = {
     'shirkat-ghaen': 'شرکت آذین طب سلامت رازی — سایت قاین',
     'sarmaye-ghaen': 'دفتر سرمایه‌گذاری — قاین',
@@ -1614,12 +1615,11 @@
     var catSel = document.getElementById('filterCategory');
     var deptSel = document.getElementById('filterDepartment');
     var list = siteAssets();
-    var cats = Array.from(new Set(list.map(function (a) { return a.category; }).filter(Boolean)));
     var depts = Array.from(new Set(list.map(function (a) { return a.department; }).filter(Boolean)));
     var curCat = catSel.value, curDept = deptSel.value;
-    catSel.innerHTML = '<option value="">همه دسته‌ها</option>' + cats.map(function (c) { return '<option value="' + esc(c) + '">' + esc(c) + '</option>'; }).join('');
+    catSel.innerHTML = '<option value="">همه دسته‌ها</option>' + CATEGORY_OPTIONS.map(function (c) { return '<option value="' + esc(c) + '">' + esc(c) + '</option>'; }).join('');
     deptSel.innerHTML = '<option value="">همه واحدها</option>' + depts.map(function (d) { return '<option value="' + esc(d) + '">' + esc(d) + '</option>'; }).join('');
-    catSel.value = cats.indexOf(curCat) > -1 ? curCat : '';
+    catSel.value = CATEGORY_OPTIONS.indexOf(curCat) > -1 ? curCat : '';
     deptSel.value = depts.indexOf(curDept) > -1 ? curDept : '';
 
     var deptDatalist = document.getElementById('departmentsDatalist');
