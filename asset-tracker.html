@@ -102,6 +102,12 @@
     position: fixed; inset: 0; z-index: 0; opacity: .55; pointer-events: none;
   }
   .app-root { position: relative; z-index: 1; min-height: 100vh; }
+  .app-version-badge {
+    position: fixed; bottom: 10px; left: 12px; z-index: 50;
+    font-size: 10.5px; color: var(--text-faint); background: var(--bg-panel);
+    border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px;
+    opacity: .75; pointer-events: none; direction: ltr;
+  }
 
   ::selection { background: var(--accent); color: #06110F; }
 
@@ -245,6 +251,11 @@
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
   .hero-search h2 { font-size: 21px; font-weight: 800; margin: 0 0 6px; }
   .hero-search p { font-size: 13.5px; color: var(--text-dim); margin: 0 0 22px; }
+  .global-search-toggle {
+    display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; font-size: 12px;
+    color: var(--text-dim); cursor: pointer;
+  }
+  .global-search-toggle input { width: auto; margin: 0; }
   .suggest-box {
     max-width: 560px; margin: 8px auto 0; background: var(--bg-panel); border: 1px solid var(--border-strong);
     border-radius: var(--radius-sm); overflow: hidden; text-align: right; box-shadow: var(--shadow);
@@ -579,6 +590,7 @@
 <body>
 
 <canvas id="particles"></canvas>
+<div class="app-version-badge" id="appVersionBadge">AzinWare v1.1.0</div>
 
 <div class="app-root">
 
@@ -678,6 +690,10 @@
           <button type="submit">جستجو</button>
         </form>
         <div class="suggest-box hidden" id="suggestBox"></div>
+        <label class="global-search-toggle hidden" id="globalSearchWrap">
+          <input type="checkbox" id="globalSearchToggle">
+          جستجو در همه‌ی سایت‌ها
+        </label>
       </section>
 
       <div class="result-wrap" id="resultWrap"></div>
@@ -827,7 +843,8 @@
       <div class="form-row">
         <div class="field">
           <label for="f_location">محل</label>
-          <input id="f_location" type="text" placeholder="مثلاً طبقه دوم">
+          <input id="f_location" type="text" placeholder="مثلاً طبقه دوم" list="locationsDatalist" autocomplete="off">
+          <datalist id="locationsDatalist"></datalist>
         </div>
         <div class="field">
           <label for="f_date">تاریخ تحویل</label>
@@ -874,7 +891,7 @@
         </div>
         <div class="field">
           <label for="t_location">محل جدید</label>
-          <input id="t_location" type="text">
+          <input id="t_location" type="text" list="locationsDatalist" autocomplete="off">
         </div>
       </div>
       <div class="field">
@@ -1096,14 +1113,14 @@
   var CATEGORY_OPTIONS = ['تجهیزات رایانه‌ای', 'مبلمان و کمدهای اداری', 'ماشین‌آلات کارخانه', 'آنادایزینگ', 'پرداخت', 'انبار حین ساخت', 'انبار ابزار و مصرفی', 'ابزار', 'حراست', 'سایر'];
   var SITE_LABELS = {
     'shirkat-ghaen': 'شرکت آذین طب سلامت رازی — سایت قاین',
-    'sarmaye-ghaen': 'دفتر سرمایه‌گذاری — قاین',
+    'sarmaye-ghaen': 'دفتر مشارکت — قاین',
     'shirkat-zirkuh': 'شرکت آذین طب سلامت رازی — سایت زیرکوه',
-    'sarmaye-zirkuh': 'دفتر سرمایه‌گذاری — زیرکوه',
+    'sarmaye-zirkuh': 'دفتر مشارکت — زیرکوه',
     'unassigned': 'دارایی‌های بدون سایت مشخص'
   };
   var SITE_SHORT = {
-    'shirkat-ghaen': 'شرکت — قاین', 'sarmaye-ghaen': 'سرمایه‌گذاری — قاین',
-    'shirkat-zirkuh': 'شرکت — زیرکوه', 'sarmaye-zirkuh': 'سرمایه‌گذاری — زیرکوه',
+    'shirkat-ghaen': 'شرکت — قاین', 'sarmaye-ghaen': 'مشارکت — قاین',
+    'shirkat-zirkuh': 'شرکت — زیرکوه', 'sarmaye-zirkuh': 'مشارکت — زیرکوه',
     'unassigned': 'بدون سایت'
   };
   function allowedSitesFor(user) {
@@ -1136,6 +1153,8 @@
     var isAdmin = !!(currentUser && currentUser.role === 'admin');
     if (adminBtn) adminBtn.classList.toggle('hidden', !isAdmin);
     if (logsBtn) logsBtn.classList.toggle('hidden', !isAdmin);
+    var globalSearchWrap = document.getElementById('globalSearchWrap');
+    if (globalSearchWrap) globalSearchWrap.classList.toggle('hidden', !isAdmin);
     var showBackBtn = !!(currentUser && allowedSitesFor(currentUser).length > 1);
     if (backBtn) backBtn.classList.toggle('hidden', !showBackBtn);
     if (sitePill) {
@@ -1643,10 +1662,15 @@
 
     var deptDatalist = document.getElementById('departmentsDatalist');
     var nameDatalist = document.getElementById('itemNamesDatalist');
+    var locDatalist = document.getElementById('locationsDatalist');
     if (deptDatalist) deptDatalist.innerHTML = depts.map(function (d) { return '<option value="' + esc(d) + '">'; }).join('');
     if (nameDatalist) {
       var names = Array.from(new Set(list.map(function (a) { return a.name; }).filter(Boolean)));
       nameDatalist.innerHTML = names.map(function (n) { return '<option value="' + esc(n) + '">'; }).join('');
+    }
+    if (locDatalist) {
+      var locs = Array.from(new Set(list.map(function (a) { return a.location; }).filter(Boolean)));
+      locDatalist.innerHTML = locs.map(function (l) { return '<option value="' + esc(l) + '">'; }).join('');
     }
   }
 
@@ -1684,9 +1708,12 @@
     return '<span class="status-badge ' + cls + '">' + esc(label) + '</span>';
   }
 
+  var globalSearchMode = false;
+  function searchScope() { return globalSearchMode ? assets : siteAssets(); }
+
   function findMatches(query) {
     var qLower = query.toLowerCase();
-    return siteAssets().filter(function (a) {
+    return searchScope().filter(function (a) {
       return (a.code || '').toLowerCase().indexOf(qLower) > -1 ||
         (a.name || '').toLowerCase().indexOf(qLower) > -1 ||
         (a.assignee || '').toLowerCase().indexOf(qLower) > -1 ||
@@ -1700,7 +1727,7 @@
   function renderDetailCard(match) {
     var html = '';
     html += '<div class="result-card">';
-    html += '<div class="result-top"><div><div class="name">' + esc(match.name) + '</div><div class="code">کد اموال: ' + esc(match.code) + '</div></div>' + statusBadge(match.status) + '</div>';
+    html += '<div class="result-top"><div><div class="name">' + esc(match.name) + '</div><div class="code">کد اموال: ' + esc(match.code) + (globalSearchMode && match.site ? ' — ' + esc(SITE_SHORT[match.site] || match.site) : '') + '</div></div>' + statusBadge(match.status) + '</div>';
     html += '<div class="result-grid">';
     html += '<div class="result-item"><div class="k">شخص مسئول</div><div class="v">' + esc(match.assignee) + '</div></div>';
     html += '<div class="result-item"><div class="k">واحد</div><div class="v">' + esc(match.department) + '</div></div>';
@@ -1733,9 +1760,10 @@
     var html = '<div class="multi-results">';
     html += '<div class="multi-results-head">' + toFaDigits(matches.length) + ' نتیجه برای «' + esc(query) + '»</div>';
     matches.forEach(function (a) {
+      var siteTag = (globalSearchMode && a.site) ? ' · ' + esc(SITE_SHORT[a.site] || a.site) : '';
       html += '<div class="multi-result-row" data-code="' + esc(a.code) + '">' +
         '<div class="mr-main"><div class="mr-name">' + esc(a.name) + '</div>' +
-        '<div class="mr-sub">' + esc(a.assignee) + ' · ' + esc(a.department) + ' · <span class="mr-code">' + esc(a.code) + '</span></div></div>' +
+        '<div class="mr-sub">' + esc(a.assignee) + ' · ' + esc(a.department) + siteTag + ' · <span class="mr-code">' + esc(a.code) + '</span></div></div>' +
         statusBadge(a.status) +
         '</div>';
     });
@@ -1743,7 +1771,7 @@
     wrap.innerHTML = html;
     wrap.querySelectorAll('.multi-result-row').forEach(function (row) {
       row.addEventListener('click', function () {
-        var a = siteAssets().find(function (x) { return x.code === row.getAttribute('data-code'); });
+        var a = searchScope().find(function (x) { return x.code === row.getAttribute('data-code'); });
         if (a) wrap.innerHTML = renderDetailCard(a);
         var backBtn = document.getElementById('resultBackToList');
         if (backBtn) backBtn.addEventListener('click', function () { renderMultiResults(matches, query); });
@@ -1754,7 +1782,7 @@
   function renderResult(query) {
     var wrap = document.getElementById('resultWrap');
     var qLower = query.toLowerCase();
-    var exact = siteAssets().find(function (a) { return (a.code || '').toLowerCase() === qLower; });
+    var exact = searchScope().find(function (a) { return (a.code || '').toLowerCase() === qLower; });
     var found = findMatches(query);
 
     if (exact) {
@@ -1911,9 +1939,18 @@
     document.getElementById('filterDepartment').value = '';
     document.getElementById('filterStatus').value = '';
     document.getElementById('sortBy').value = 'newest';
+    globalSearchMode = false;
+    var gsToggle = document.getElementById('globalSearchToggle');
+    if (gsToggle) gsToggle.checked = false;
     renderList();
     window.scrollTo({ top: 0, behavior: 'smooth' });
     searchInput.focus();
+  });
+
+  document.getElementById('globalSearchToggle').addEventListener('change', function () {
+    globalSearchMode = this.checked;
+    var q = searchInput.value.trim();
+    if (q) renderResult(q);
   });
 
   searchInput.addEventListener('input', function () {
