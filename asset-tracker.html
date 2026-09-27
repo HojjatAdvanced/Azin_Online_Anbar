@@ -1035,9 +1035,16 @@
     var light = currentTheme() === 'light';
     return light ? '8,168,84' : '26,240,120';
   }
+  function isLoginContext() {
+    return (typeof loginScreen !== 'undefined' && loginScreen && !loginScreen.classList.contains('hidden')) ||
+      (typeof siteScreen !== 'undefined' && siteScreen && !siteScreen.classList.contains('hidden'));
+  }
   function tick() {
     ctx.clearRect(0, 0, W, H);
-    var rgb = getAccentRGB();
+    var glowMode = isLoginContext();
+    var rgb = glowMode ? (currentTheme() === 'light' ? '6,196,104' : '18,255,140') : getAccentRGB();
+    var linkDist = glowMode ? 175 : 130;
+    var t = Date.now() * 0.0016;
     for (var i = 0; i < particles.length; i++) {
       var p = particles[i];
       p.x += p.vx; p.y += p.vy;
@@ -1049,14 +1056,26 @@
         var a = particles[i], b = particles[j];
         var dx = a.x - b.x, dy = a.y - b.y;
         var dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < 130) {
-          ctx.strokeStyle = 'rgba(' + rgb + ',' + (0.22 * (1 - dist / 130)) + ')';
-          ctx.lineWidth = 1;
+        if (dist < linkDist) {
+          var lineAlpha = (glowMode ? 0.32 : 0.22) * (1 - dist / linkDist);
+          ctx.strokeStyle = 'rgba(' + rgb + ',' + lineAlpha + ')';
+          ctx.lineWidth = glowMode ? 1.2 : 1;
           ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
         }
       }
-      ctx.fillStyle = 'rgba(' + rgb + ',0.75)';
-      ctx.beginPath(); ctx.arc(particles[i].x, particles[i].y, 1.6, 0, Math.PI * 2); ctx.fill();
+      if (glowMode) {
+        var pulse = 0.55 + 0.45 * Math.sin(t + i * 1.7);
+        var r = 2.6 + pulse * 2.2;
+        ctx.save();
+        ctx.shadowBlur = 14 + pulse * 10;
+        ctx.shadowColor = 'rgba(' + rgb + ',0.9)';
+        ctx.fillStyle = 'rgba(' + rgb + ',' + (0.65 + pulse * 0.3) + ')';
+        ctx.beginPath(); ctx.arc(particles[i].x, particles[i].y, r, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      } else {
+        ctx.fillStyle = 'rgba(' + rgb + ',0.75)';
+        ctx.beginPath(); ctx.arc(particles[i].x, particles[i].y, 1.6, 0, Math.PI * 2); ctx.fill();
+      }
     }
     requestAnimationFrame(tick);
   }
